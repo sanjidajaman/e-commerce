@@ -1,0 +1,179 @@
+# E-Shop — Full-Stack MERN E-Commerce Platform
+
+A complete, runnable e-commerce application: product catalog with search/filter/sort,
+authentication, shopping cart, checkout, order tracking, and a full admin dashboard.
+Built with the MERN stack (MongoDB, Express, React, Node.js).
+
+📄 **Docs:** [API Reference](docs/API_DOCUMENTATION.md) · [ER Diagram](docs/ER_DIAGRAM.md) ·
+[Architecture](docs/ARCHITECTURE_DIAGRAM.md) · [Deployment Guide](docs/DEPLOYMENT_GUIDE.md)
+
+---
+
+## Features
+
+**Storefront**
+- Product browsing with search, category/price/rating filters, sorting, and pagination
+- Product detail pages with image gallery, stock status, reviews & ratings, related products
+- Shopping cart that works for guests (localStorage) and syncs to the account on login
+- Checkout with shipping form, coupon codes, and order summary
+- Order history, order tracking, and a printable order confirmation
+
+**Accounts**
+- Register / login / logout with JWT, bcrypt-hashed passwords
+- Profile editing, password change, forgot/reset password via email
+- Wishlist
+- Dark mode
+
+**Admin dashboard** (`/admin`, requires the `admin` role)
+- Sales overview: revenue, order counts, a 30-day revenue chart, top sellers
+- Product management (create/edit/delete, image upload)
+- Order management (view, update status)
+- User management (view, change role, remove)
+- Coupon management
+
+## Tech Stack
+
+| Layer | Stack |
+|---|---|
+| Frontend | React 19, Vite, React Router, Tailwind CSS v4, Axios, Recharts |
+| Backend | Node.js, Express 4, Mongoose |
+| Database | MongoDB |
+| Auth | JWT + bcrypt |
+| Uploads | Multer (local disk) |
+| Email | Nodemailer (SMTP, optional) |
+
+## Project Structure
+
+```
+ecommerce/
+├── client/                 React app (Vite)
+│   └── src/
+│       ├── components/     layout, common, product, cart, admin, route guards
+│       ├── pages/          route-level pages, incl. dashboard/ and admin/
+│       ├── context/        Auth, Cart, Theme providers
+│       ├── hooks/          useAuth, useCart, useTheme, useDebounce
+│       └── services/       one file per API resource (axios calls)
+├── server/                 Express API
+│   ├── config/             MongoDB connection
+│   ├── models/             User, Product, Order, Cart, Coupon
+│   ├── controllers/        request handlers, one file per resource
+│   ├── routes/             route definitions
+│   ├── middleware/         auth, error handling, rate limiting, sanitization, uploads
+│   └── utils/               helpers + the database seeder
+└── docs/                   ER diagram, architecture diagram, API docs, deployment guide
+```
+
+This follows an MVC-style separation on the backend (**M**odels / **C**ontrollers, with
+routes as the thin routing layer) and a conventional feature-organized structure on the
+frontend.
+
+## Prerequisites
+
+- **Node.js** 18+ and npm
+- **MongoDB** — either a [local install](https://www.mongodb.com/docs/manual/installation/)
+  or a free [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register) cluster
+
+## Getting Started
+
+```bash
+# 1. Clone and enter the project
+git clone <your-fork-url> ecommerce
+cd ecommerce
+
+# 2. Install dependencies (root, server, and client)
+npm install
+npm run install:all
+
+# 3. Configure environment variables
+cp server/.env.example server/.env
+cp client/.env.example client/.env
+# Edit server/.env - at minimum set MONGO_URI and JWT_SECRET
+
+# 4. Seed the database with demo products, users, and coupons
+npm run seed
+
+# 5. Start both the API and the frontend together
+npm run dev
+```
+
+- Frontend: **http://localhost:5173**
+- Backend API: **http://localhost:5000/api** (health check at `/api/health`)
+
+### Demo accounts (created by the seeder)
+
+| Role | Email | Password |
+|---|---|---|
+| Admin | `admin@example.com` | `admin123` |
+| Customer | `user@example.com` | `user1234` |
+
+### Demo coupons (created by the seeder)
+
+| Code | Discount |
+|---|---|
+| `WELCOME10` | 10% off any order |
+| `SAVE20` | $20 off orders of $50+ |
+
+## Available Scripts (root)
+
+| Command | Description |
+|---|---|
+| `npm run install:all` | Installs dependencies in both `server/` and `client/` |
+| `npm run dev` | Runs the API and frontend together, with labeled output |
+| `npm run server` | Runs only the API (`nodemon`, auto-restarts on change) |
+| `npm run client` | Runs only the frontend (Vite dev server) |
+| `npm run seed` | Wipes and re-seeds the database with demo data |
+| `npm run seed:destroy` | Wipes all data without reseeding |
+| `npm run build:client` | Builds the frontend for production into `client/dist` |
+
+## Design decisions & simplifications
+
+A few things were deliberately simplified since they weren't specified in the brief, and
+it's worth knowing about these before treating this as production-ready:
+
+- **Payments are mocked.** No payment gateway (Stripe, PayPal, etc.) was specified, so
+  checkout supports Cash on Delivery, or a "Card"/"PayPal" selection that's recorded but
+  not actually charged. Wiring up a real processor would replace the payment-method step
+  in `CheckoutPage.jsx` and the `paymentStatus` logic in `orderController.js`.
+- **Images are stored on local disk** via Multer, not a cloud bucket. Fine for local dev
+  and single-instance deployments; for a multi-instance production deploy, swap the
+  storage engine in `server/middleware/upload.js` for S3/Cloudinary/etc., since local
+  disk storage doesn't survive redeploys on most hosts (see the deployment guide).
+- **Email requires SMTP credentials to actually send.** Without `SMTP_HOST`/`SMTP_USER`
+  configured, `sendEmail.js` prints the email to the server console instead — so
+  registration and password reset still work end-to-end locally, you just read the reset
+  link from the terminal instead of an inbox.
+- **One review per user per product**, not gated on a verified purchase.
+- **React Router is pinned to v6** rather than the latest v7. An `npm audit` review found
+  the current 7.x line carries several high-severity CVEs that are exclusive to
+  SSR/React-Server-Components "framework mode" (open redirects in server actions, SSR
+  hydration issues, etc.) — none of which apply to this client-only SPA — while v6 has
+  no unresolved advisories that apply to this usage. If you upgrade later, the
+  `<BrowserRouter>`/`<Routes>`/`<Route>` API used throughout this codebase is unchanged
+  in v7's declarative mode.
+
+## Security
+
+- Passwords hashed with bcrypt; JWTs signed with a server-side secret
+- `helmet` for security headers, `cors` restricted to `CLIENT_URL`
+- Rate limiting (tighter on auth endpoints) via `express-rate-limit`
+- A dependency-free request sanitizer strips NoSQL-operator keys (`$gt`, dotted paths)
+  and escapes HTML in `req.body`/`req.query` — see the comment in
+  `server/middleware/sanitize.js` for why this is custom rather than using
+  `express-mongo-sanitize`/`xss-clean` (both hit a compatibility bug where they try to
+  reassign `req.query`, which is a getter-only property in Express)
+- `express-validator` on auth/product/review inputs
+- All prices and stock are re-validated server-side at checkout — the client is never
+  trusted for money-affecting values
+
+## Testing it out
+
+1. Run `npm run seed`, then `npm run dev`
+2. Browse the catalog, filter/sort, open a product, add it to your cart
+3. Register a new account (or log in as `user@example.com`) and check out with coupon
+   `WELCOME10`
+4. Log in as `admin@example.com` and visit `/admin` to manage products, orders, users,
+   and coupons
+
+## License
+
+MIT — free to use for learning or as a starting point for your own project.
